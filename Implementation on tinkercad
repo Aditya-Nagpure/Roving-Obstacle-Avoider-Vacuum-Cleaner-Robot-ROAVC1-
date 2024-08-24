@@ -1,0 +1,220 @@
+#include <IRremote.h>
+#include <Servo.h>
+
+#define RMS 5
+#define RML 6
+#define RMN 7
+#define LMS 4
+#define LML 3
+#define LMN 2
+#define CMS A4
+#define CML A3
+#define CMN A2
+
+const int RECV_PIN = A5;
+IRrecv irrecv(RECV_PIN);
+decode_results results;
+int pos = 0;
+Servo servo_11;
+const int trigPin = 12;
+const int echoPin = 13;
+const int red = 10;
+const int blue = 9;
+const int green = 8;
+int stopDist = 50;
+float duration, distance;
+
+void setup() {
+  
+  servo_11.attach(11);
+  pinMode(A0, OUTPUT);
+  pinMode(A1, OUTPUT);
+  pinMode(red, OUTPUT);
+  pinMode(blue, OUTPUT);
+  pinMode(green, OUTPUT);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(RMS, OUTPUT);
+  pinMode(RML, OUTPUT);
+  pinMode(RMN, OUTPUT);
+  pinMode(LMS, OUTPUT);
+  pinMode(LML, OUTPUT);
+  pinMode(LMN, OUTPUT);
+  pinMode(CMS, OUTPUT);
+  pinMode(CML, OUTPUT);
+  pinMode(CMN, OUTPUT);
+  digitalWrite(RMS, HIGH);
+  digitalWrite(LMS, HIGH);
+  digitalWrite(CMS, HIGH);
+  Serial.begin(6000);
+  irrecv.enableIRIn();
+}
+
+void loop() 
+{
+  if (irrecv.decode(&results)) {
+   Serial.println(results.value, HEX);
+   irrecv.resume(); // Receive the next value
+  }
+  delay(100);
+
+  switch(results.value){
+    case 0xFD50AF:play();break;
+    case 0xFD10EF:stopall();break;
+  }
+}
+
+void play(){
+  servo_11.write(90); 
+  delay(100);
+  sense();
+  if(distance >= stopDist)
+     {
+       forward();
+     }
+  while(distance >= stopDist) 
+      {
+        sense();
+        delay(100);
+       }
+  stop();
+  checkDirection();
+}
+void sense() {
+  
+  if (irrecv.decode(&results)) {
+    loop();
+  }
+  else{
+    
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    duration = pulseIn(echoPin, HIGH);
+    distance = (duration*.0343)/2;
+    Serial.print("Distance: ");
+    Serial.println(distance);
+  }
+  delay(100);
+  
+}
+
+void forward() {
+  digitalWrite(A1, HIGH);
+  digitalWrite(A0, LOW);
+  digitalWrite(RML, HIGH);
+  digitalWrite(RMN, LOW);
+  digitalWrite(LML, HIGH);
+  digitalWrite(LMN, LOW);
+  digitalWrite(CML, HIGH);
+  digitalWrite(CMN, LOW);
+  digitalWrite(red, LOW);
+  digitalWrite(blue, LOW);
+  digitalWrite(green, HIGH);
+}
+
+void stop() {
+  digitalWrite(A1, HIGH);
+  digitalWrite(A0, LOW);
+  digitalWrite(RML, LOW);
+  digitalWrite(RMN, LOW);
+  digitalWrite(LML, LOW);
+  digitalWrite(LMN, LOW);
+  digitalWrite(CML, LOW);
+  digitalWrite(CMN, LOW);
+  digitalWrite(red, HIGH);
+  digitalWrite(blue, LOW);
+  digitalWrite(green, LOW);
+  irrecv.resume();
+}
+
+void backward() {
+  digitalWrite(RML, LOW);
+  digitalWrite(RMN, HIGH);
+  digitalWrite(LML, LOW);
+  digitalWrite(LMN, HIGH);
+  digitalWrite(CML, LOW);
+  digitalWrite(CMN, HIGH);
+  irrecv.resume();
+}
+
+void turnRight() {
+  digitalWrite(A1, HIGH);
+  digitalWrite(A0, LOW);
+  digitalWrite(RML, HIGH);
+  digitalWrite(RMN, LOW);
+  digitalWrite(LML, LOW);
+  digitalWrite(LMN, LOW);
+  digitalWrite(CML, LOW);
+  digitalWrite(CMN, LOW);
+  digitalWrite(red, LOW);
+  digitalWrite(blue, HIGH);
+  digitalWrite(green, LOW);
+}
+
+void turnLeft() {
+  digitalWrite(A1, HIGH);
+  digitalWrite(A0, LOW);
+  digitalWrite(RML, LOW);
+  digitalWrite(RMN, LOW);
+  digitalWrite(LML, HIGH);
+  digitalWrite(LMN, LOW);
+  digitalWrite(CML, LOW);
+  digitalWrite(CMN, LOW);
+  digitalWrite(red, LOW);
+  digitalWrite(blue, HIGH);
+  digitalWrite(green, LOW);
+}
+
+void stopall() {
+  digitalWrite(A1, 0);
+  digitalWrite(A0, 0);
+  digitalWrite(RML, LOW);
+  digitalWrite(RMN, LOW);
+  digitalWrite(LML, LOW);
+  digitalWrite(LMN, LOW);
+  digitalWrite(CML, LOW);
+  digitalWrite(CMN, LOW);
+  digitalWrite(red, LOW);
+  digitalWrite(blue, LOW);
+  digitalWrite(green, LOW);
+}
+
+void checkDirection()                       //Check the left and right directions and decide which way to turn
+{
+  int distances [2] = {0,0};                                    //Left and right distances
+  int turnDir = 1;                                              //Direction to turn, 0 left, 1 reverse, 2 right
+  servo_11.write(180);                                         //Turn servo to look left
+  delay(500);
+  distances [0] = distance;                                //Get the left object distance
+  servo_11.write(0);                                           //Turn servo to look right
+  delay(1000);
+  distances [1] = distance;                                //Get the right object distance
+  if (distances[0]>=200 && distances[1]>=200)                   //If both directions are clear, turn left
+    turnDir = 0;
+  else if (distances[0]<=stopDist && distances[1]<=stopDist)    //If both directions are blocked, turn around
+    turnDir = 1;
+  else if (distances[0]>=distances[1])                          //If left has more space, turn left
+    turnDir = 0;
+  else if (distances[0]<distances[1])                           //If right has more space, turn right
+    turnDir = 2;
+    
+  Serial.print(turnDir);
+  switch (turnDir)  //Turn left, turn around or turn right depending on the instruction
+  {
+    case 0:         //Turn left
+      turnLeft();
+      delay(400);
+      break;
+    case 1:         //Turn around
+      turnLeft();
+      delay(700);
+      break;
+    case 2:         //Turn right
+      turnRight();
+      delay(400);
+      break;
+  }
+}
